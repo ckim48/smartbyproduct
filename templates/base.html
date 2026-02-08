@@ -1,0 +1,136 @@
+{# templates/base.html #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Smart Food Inventory{% endblock %}</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+  <style>
+    :root {
+      --primary-color: #0d6efd;
+      --glass-bg: rgba(255, 255, 255, 0.85);
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8f9fa; /* Soft background color */
+      color: #212529;
+    }
+
+    /* Modern Glassmorphism Navbar */
+    .navbar-modern {
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
+      padding: 0.75rem 0;
+      transition: all 0.3s ease;
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #1a1a1a !important;
+    }
+
+    .navbar-brand span {
+      color: var(--primary-color);
+    }
+
+    /* Animated Underline for Nav Links */
+    .nav-link-custom {
+      position: relative;
+      font-weight: 500;
+      color: #6c757d !important;
+      font-size: 0.95rem;
+      padding: 0.5rem 0 !important;
+      transition: color 0.2s ease;
+    }
+
+    .nav-link-custom:hover {
+      color: var(--primary-color) !important;
+    }
+
+    .nav-link-custom::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 2px;
+      bottom: 0;
+      left: 0;
+      background-color: var(--primary-color);
+      transition: width 0.3s ease;
+    }
+
+    .nav-link-custom:hover::after {
+      width: 100%;
+    }
+
+    /* Action Button Styling */
+    .btn-nav-action {
+      border-radius: 50px;
+      padding: 0.5rem 1.25rem;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: transform 0.2s ease;
+    }
+
+    .btn-nav-action:hover {
+      transform: translateY(-1px);
+    }
+
+    /* Disabled action button styling (still looks intentional) */
+    .btn-nav-action:disabled {
+      opacity: 0.75;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 991px) {
+      .navbar-collapse {
+        background: white;
+        padding: 1rem;
+        border-radius: 15px;
+        margin-top: 10px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      }
+    }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-modern sticky-top">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <span>Smart</span>Inventory
+    </a>
+
+    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <div class="d-flex align-items-center ms-auto">
+        <button class="btn btn-primary btn-nav-action shadow-sm" type="button" disabled>
+          Working on Login/Signup
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="py-4">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

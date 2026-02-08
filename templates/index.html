@@ -1,571 +1,649 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Food Inventory</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+{% extends "base.html" %}
 
-  <style>
-    body{ background:#f4f7f6; padding:48px 0; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; }
-    .container{ max-width:1100px; background:#fff; padding:28px; border-radius:14px; box-shadow:0 10px 25px rgba(0,0,0,0.06); }
-    .muted{ color:#6c757d; }
-    .panel{ position:relative; border:1px solid rgba(0,0,0,0.08); border-radius:12px; padding:16px; background:#fff; }
-    .loading-overlay{ display:none; position:absolute; inset:0; background:rgba(255,255,255,0.75); border-radius:12px; align-items:center; justify-content:center; z-index:5; }
-    .badge-byproduct{ background:#eef1f4; border:1px solid rgba(0,0,0,0.08); color:#223; font-weight:600; margin:2px 4px 2px 0; }
-    pre{ white-space:pre-wrap; margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; font-size:14px; line-height:1.55; }
-    .log-pill{ font-weight:700; font-size:12px; padding:6px 10px; border-radius:999px; display:inline-block; border:1px solid rgba(0,0,0,.12); background:#f7f7f7; }
-    .log-add{ background:#eef9f1; }
-    .log-del{ background:#fff0f0; }
-    .log-make{ background:#eef3ff; }
-    .log-details{ font-size:13px; }
-  </style>
-</head>
+{% block title %}Smart Kitchen | Inventory{% endblock %}
 
-<body>
-  <div class="container">
-    <div class="text-center mb-4">
-      <h2 class="mb-1">Smart Inventory</h2>
-      <div class="muted">Identify byproducts and reduce food waste.</div>
-    </div>
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
-    <!-- ADD ITEM -->
-    <div class="panel mb-4">
-      <div id="addLoading" class="loading-overlay">
-        <div class="d-flex align-items-center gap-2">
-          <div class="spinner-border" role="status" aria-hidden="true"></div>
-          <div class="fw-semibold">Getting byproducts...</div>
-        </div>
-      </div>
+<style>
+:root {
+    --brand-dark: #0f172a;
+    --brand-primary: #2dd4bf;
+    --brand-primary-soft: #f0fdfa;
+    --brand-accent: #6366f1;
+    --brand-bg: #f8fafc;
+    --brand-border: #e2e8f0;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --radius-3xl: 24px;
+    --radius-xl: 16px;
+    --shadow-soft: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+}
 
-      <form id="addForm">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-6">
-            <label class="form-label">Grocery item</label>
-            <input id="itemName" type="text" class="form-control form-control-lg"
-                   placeholder="e.g., Orange, Broccoli, Shrimp" required>
-          </div>
+body {
+    background-color: var(--brand-bg);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-main);
+    letter-spacing: -0.01em;
+}
 
-          <div class="col-md-3">
-            <label class="form-label">Quantity</label>
-            <input id="itemQty" type="number" step="0.1" min="0.1"
-                   class="form-control form-control-lg" value="1" required>
-          </div>
+.app-container { max-width: 1240px; margin: 0 auto; padding: 2rem 1.5rem; }
 
-          <div class="col-md-3">
-            <label class="form-label">Unit</label>
-            <select id="itemUnit" class="form-select form-select-lg">
-              <option value="pcs" selected>pcs</option>
-              <option value="g">g</option>
-              <option value="kg">kg</option>
-              <option value="ml">ml</option>
-              <option value="L">L</option>
-            </select>
-          </div>
+.bento-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+}
 
-          <div class="col-12 d-flex justify-content-end mt-2">
-            <button id="addBtn" class="btn btn-dark btn-lg" type="submit">Track item</button>
-          </div>
-        </div>
-      </form>
+@media (max-width: 992px) { .bento-grid { grid-template-columns: 1fr; } }
 
-      <div id="addError" class="text-danger small mt-2" style="display:none;"></div>
-    </div>
+.glass-panel {
+    background: #ffffff;
+    border: 1px solid var(--brand-border);
+    border-radius: var(--radius-xl);
+    padding: 1.75rem;
+    box-shadow: var(--shadow-soft);
+    position: relative;
+}
 
-    <!-- INVENTORY -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h5 class="mb-0">Inventory</h5>
-      <div class="d-flex gap-2">
-        <a class="btn btn-outline-dark btn-sm" href="#recipePanel">Go to recipe</a>
-        <a class="btn btn-outline-dark btn-sm" href="#logPanel">Go to logs</a>
-      </div>
-    </div>
+.item-card {
+    background: #fff;
+    border: 1px solid var(--brand-border);
+    border-radius: var(--radius-xl);
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+}
+.item-card:hover {
+    border-color: var(--brand-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 20px -10px rgba(45, 212, 191, 0.2);
+}
 
-    <div class="table-responsive mb-4">
-      <table class="table align-middle">
-        <thead class="table-light">
-          <tr>
-            <th style="width: 26%;">Main food</th>
-            <th style="width: 18%;">Quantity</th>
-            <th>Byproducts</th>
-            <th style="width: 10%;" class="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="invBody">
-          {% for item in inventory %}
-          <tr data-id="{{ item.id }}">
-            <td class="fw-semibold text-capitalize">{{ item.name }}</td>
-            <td class="muted">
-              <span class="qty">{{ item.qty }}</span>
-              <span class="ms-1 unit">{{ item.unit }}</span>
-            </td>
-            <td class="parts">
-              {% set parts = item.minor_part.split(',') %}
-              {% for part in parts %}
-                {% set p = part.strip() %}
-                {% if p %}
-                  <span class="badge badge-byproduct text-dark">{{ p }}</span>
-                {% endif %}
-              {% endfor %}
-            </td>
-            <td class="text-end">
-              <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteItem({{ item.id }})">Delete</button>
-            </td>
-          </tr>
-          {% endfor %}
+.qty-badge {
+    background: var(--brand-dark);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
 
-          {% if not inventory %}
-          <tr id="emptyRow">
-            <td colspan="4" class="text-center py-4 muted">Your inventory is empty.</td>
-          </tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+.part-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+    background: var(--brand-primary-soft);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(45, 212, 191, 0.2);
+}
 
-    <!-- RECIPE -->
-    <div id="recipePanel" class="panel mb-4">
-      <div id="recipeLoading" class="loading-overlay">
-        <div class="d-flex align-items-center gap-2">
-          <div class="spinner-border" role="status" aria-hidden="true"></div>
-          <div class="fw-semibold">Working...</div>
-        </div>
-      </div>
+.form-input-group {
+    background: #f1f5f9;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    padding: 4px 12px;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+}
+.form-input-group:focus-within {
+    background: #fff;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.1);
+}
+.form-input-group input, .form-input-group select {
+    border: none; background: transparent; padding: 10px; width: 100%; outline: none; font-weight: 500;
+}
 
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+.btn-action {
+    background: var(--brand-dark);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-weight: 700;
+    transition: opacity 0.2s;
+}
+.btn-action:hover { opacity: 0.9; color: black; background-color:white; border:1px solid black;}
+
+.btn-secondary-outline {
+    border: 2px solid var(--brand-border);
+    border-radius: 12px;
+    padding: 10px 20px;
+    font-weight: 600;
+    color: var(--brand-dark);
+    background: transparent;
+}
+
+.step-bar-container { display: flex; gap: 8px; margin-bottom: 2rem; }
+.step-bar { height: 6px; flex: 1; background: var(--brand-border); border-radius: 3px; position: relative; }
+.step-bar.active { background: var(--brand-primary); }
+
+.loading-screen {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(4px); z-index: 50; display: flex;
+    align-items: center; justify-content: center; border-radius: var(--radius-xl);
+}
+
+.recipe-step-card{
+  background:#fff;
+  border:1px solid var(--brand-border);
+  border-radius:14px;
+  padding:14px 14px;
+  box-shadow: var(--shadow-soft);
+}
+.recipe-step-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.recipe-step-badge{
+  background: var(--brand-dark);
+  color:#fff;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:.72rem;
+  font-weight:800;
+}
+.recipe-step-text{
+  line-height:1.7;
+  color:#334155;
+  font-weight:500;
+  margin:0;
+}
+
+.tutorial-fab{
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1060;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  background: var(--brand-dark);
+  color: #fff;
+  box-shadow: 0 16px 40px rgba(15,23,42,0.18);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.tutorial-fab:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px rgba(15,23,42,0.22);
+  color: #fff;
+}
+.tutorial-fab:active{ transform: translateY(0px); }
+.tutorial-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 0 0 4px rgba(255,255,255,0.16);
+  flex: 0 0 auto;
+}
+
+.tutorial-modal .modal-dialog{ max-width: 860px; }
+.tutorial-modal .modal-content{
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.14);
+}
+.tutorial-modal .modal-header{
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  padding: 16px 18px;
+  background: rgba(255,255,255,0.65);
+}
+.tutorial-modal .modal-title{
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--text-main);
+}
+.tutorial-modal .modal-body{ padding: 18px; }
+.tut-grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 768px){ .tut-grid{ grid-template-columns: 1fr; } }
+.tut-step{
+  display:flex;
+  gap:12px;
+  padding:12px 12px;
+  border:1px solid rgba(0,0,0,0.06);
+  border-radius:14px;
+  background:#fff;
+  box-shadow: var(--shadow-soft);
+}
+.tut-num{
+  width:36px;
+  height:36px;
+  border-radius:12px;
+  background: rgba(45,212,191,0.14);
+  color: #0f766e;
+  display:grid;
+  place-items:center;
+  font-weight:900;
+  flex: 0 0 auto;
+}
+.tut-text h6{
+  margin:0 0 4px 0;
+  font-weight:800;
+  font-size:0.98rem;
+  color: var(--text-main);
+}
+.tut-text p{
+  margin:0;
+  color:#4b5563;
+  font-size:0.92rem;
+  line-height:1.45;
+}
+.tutorial-modal .modal-footer{
+  border-top: 1px solid rgba(0,0,0,0.06);
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.65);
+}
+.btn-tut-close{
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 800;
+  background: var(--brand-dark);
+  color: #fff;
+  border: 1px solid rgba(0,0,0,0.12);
+}
+.btn-tut-close:hover{
+  background:#fff;
+  color:#000;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-container">
+
+    <div class="mb-5 d-flex justify-content-between align-items-center">
         <div>
-          <h5 class="mb-1">Recipe</h5>
-          <div class="muted">Generate a preview, then click Make to subtract the used items from inventory and save a log entry.</div>
+            <h1 class="fw-800" style="font-size: 2.25rem; letter-spacing: -0.03em;">Smart Inventory</h1>
+            <p class="text-muted m-0">AI-driven byproduct mapping and waste reduction.</p>
         </div>
-        <div class="d-flex gap-2">
-          <button id="previewBtn" class="btn btn-outline-dark btn-lg" type="button" onclick="previewRecipe()">Generate</button>
-          <button id="makeBtn" class="btn btn-dark btn-lg" type="button" onclick="makeRecipe()" disabled>Make</button>
+        <div class="d-none d-md-block d-none">
+            <button class="btn btn-secondary-outline d-none" onclick="loadLogs(false)">
+                <i class="bi bi-arrow-clockwise me-2"></i>Sync
+            </button>
         </div>
-      </div>
-
-      <div id="recipeError" class="text-danger small mt-2" style="display:none;"></div>
-
-      <div class="mt-3">
-        <div class="fw-semibold mb-2">Recipe preview</div>
-        <div class="card border-0 shadow-sm">
-          <div class="card-body">
-            <pre id="recipeOut" class="mb-0 muted">No recipe generated yet.</pre>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-3">
-        <div class="fw-semibold mb-2">Will use from inventory</div>
-        <div class="card border-0 shadow-sm">
-          <div class="card-body">
-            <div id="useList" class="muted">No usage calculated yet.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-3">
-        <div class="fw-semibold mb-2">Applied to inventory</div>
-        <div class="card border-0 shadow-sm">
-          <div class="card-body">
-            <div id="appliedBox" class="muted">Nothing applied yet.</div>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- LOGS -->
-    <div id="logPanel" class="panel">
-      <div id="logLoading" class="loading-overlay">
-        <div class="d-flex align-items-center gap-2">
-          <div class="spinner-border" role="status" aria-hidden="true"></div>
-          <div class="fw-semibold">Loading logs...</div>
-        </div>
-      </div>
+    <div class="bento-grid">
 
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-        <div>
-          <h5 class="mb-1">Activity log</h5>
-          <div class="muted">Tracks additions, deletions, and which recipe used which items.</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <select id="logLimit" class="form-select" style="width:140px;">
-            <option value="50">Last 50</option>
-            <option value="100">Last 100</option>
-            <option value="200" selected>Last 200</option>
-            <option value="500">Last 500</option>
-          </select>
-          <button class="btn btn-outline-dark" type="button" onclick="loadLogs()">Refresh</button>
-        </div>
-      </div>
+        <main>
+            <div class="glass-panel mb-4">
+                <div id="addLoading" class="loading-screen" style="display:none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
 
-      <div id="logError" class="text-danger small mt-2" style="display:none;"></div>
-
-      <div class="table-responsive mt-3">
-        <table class="table align-middle">
-          <thead class="table-light">
-            <tr>
-              <th style="width: 140px;">Time</th>
-              <th style="width: 140px;">Event</th>
-              <th>Summary</th>
-              <th style="width: 10%;" class="text-end">Details</th>
-            </tr>
-          </thead>
-          <tbody id="logBody">
-            <tr><td colspan="4" class="muted text-center py-4">No logs loaded yet.</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- details modal -->
-      <div class="modal fade" id="logModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Log details</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="fw-700 mb-4"><i class="bi bi-plus-circle-fill me-2 text-primary"></i>Track Item</h5>
+                <form id="addForm" class="row g-3">
+                    <div class="col-md-6">
+                        <div class="form-input-group">
+                            <i class="bi bi-search text-muted"></i>
+                            <input id="itemName" type="text" placeholder="Ingredient name..." required>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="form-input-group">
+                            <input id="itemQty" type="number" step="0.1" value="1" required>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="form-input-group">
+                            <select id="itemUnit">
+                                <option value="pcs">pcs</option>
+                                <option value="g">g</option>
+                                <option value="kg">kg</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-12 text-end">
+                        <button class="btn btn-action px-5" type="submit">Add to Pantry</button>
+                    </div>
+                </form>
             </div>
-            <div class="modal-body">
-              <pre id="logModalPre" class="mb-0"></pre>
+
+            <div class="mb-5">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-700 m-0">Current Pantry</h5>
+                    <span class="small fw-700 text-muted" id="invCount">0 Items</span>
+                </div>
+                <div id="invGrid" class="row g-3">
+                    </div>
+            </div>
+
+            <div class="glass-panel" id="recipeWizard">
+                <div id="recipeLoading" class="loading-screen" style="display:none;">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+
+                <div class="step-bar-container">
+                    <div class="step-bar active" id="sBar1"></div>
+                    <div class="step-bar" id="sBar2"></div>
+                    <div class="step-bar" id="sBar3"></div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-start mb-4">
+                    <div>
+                        <h5 class="fw-700 mb-1">Recipe Intelligence</h5>
+                        <p class="text-muted small">Utilizing main ingredients and their byproducts.</p>
+                    </div>
+
+                    <button id="recipeGenBtn" class="btn btn-action" onclick="generateRecipe()">
+                        <i class="bi bi-magic me-2"></i><span id="recipeGenBtnText">Generate Recipe</span>
+                    </button>
+                </div>
+
+                <div id="recipeBox" class="bg-light p-4 rounded-4 border">
+                    <p class="text-center text-muted m-0 small">No recipe generated yet.</p>
+                </div>
+
+                <div id="recipeControls" class="mt-4 pt-3 border-top d-flex justify-content-end" style="display:none !important;">
+                    <button class="btn btn-action px-5" onclick="makeRecipe()">
+                        <i class="bi bi-check-all me-2"></i>Apply Usage
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <aside>
+            <div class="glass-panel">
+                <h6 class="fw-800 mb-4"><i class="bi bi-clock-history me-2"></i>Activity</h6>
+                <div id="logArea" class="d-flex flex-column gap-3">
+                    </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<div class="modal fade" id="logModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: none;">
+            <div class="modal-body p-4">
+                <h6 class="fw-800 mb-3">Log Metadata</h6>
+                <pre id="logDetails" class="bg-light p-3 rounded-3 small" style="max-height: 300px;"></pre>
+                <button class="btn btn-dark w-100 rounded-3" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button type="button" class="tutorial-fab" data-bs-toggle="modal" data-bs-target="#tutorialModal" aria-label="Open tutorial">
+  <span class="tutorial-dot" aria-hidden="true"></span>
+  Tutorial
+</button>
+
+<div class="modal fade tutorial-modal" id="tutorialModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="text-muted" style="font-size:0.85rem; font-weight:700;">SmartInventory Guide</div>
+          <h5 class="modal-title">How to Use This App</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="tut-grid">
+          <div class="tut-step">
+            <div class="tut-num">1</div>
+            <div class="tut-text">
+              <h6>Add items</h6>
+              <p>Enter an ingredient, quantity, and unit. Byproducts are mapped automatically.</p>
+            </div>
+          </div>
+
+          <div class="tut-step">
+            <div class="tut-num">2</div>
+            <div class="tut-text">
+              <h6>Generate a recipe</h6>
+              <p>Click “Generate Recipe” to get a title and step-by-step instructions as cards.</p>
+            </div>
+          </div>
+
+          <div class="tut-step">
+            <div class="tut-num">3</div>
+            <div class="tut-text">
+              <h6>Apply usage</h6>
+              <p>Click “Apply Usage” to subtract used quantities and save the activity log.</p>
+            </div>
+          </div>
+
+          <div class="tut-step">
+            <div class="tut-num">4</div>
+            <div class="tut-text">
+              <h6>View activity</h6>
+              <p>Check the Activity panel and click a log entry to see full details.</p>
             </div>
           </div>
         </div>
       </div>
 
+      <div class="modal-footer">
+        <button type="button" class="btn btn-tut-close shadow-sm" data-bs-dismiss="modal">
+          Got it
+        </button>
+      </div>
     </div>
   </div>
+</div>
+{% endblock %}
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}
+<script>
+let lastUsed = [];
+let lastText = '';
+let lastTitle = '';
+let lastSteps = [];
 
-  <script>
-    const invBody = document.getElementById('invBody');
-    let lastUsed = [];        // [{id, qty}]
-    let lastRecipeText = '';  // recipe text to log when "Make"
-    let lastLogs = [];        // keep logs in memory for modal
+function updateInventoryUI(items) {
+    const grid = document.getElementById('invGrid');
+    const count = document.getElementById('invCount');
+    grid.innerHTML = '';
+    count.innerText = `${items.length} Items`;
 
-    function show(el){ el.style.display = 'flex'; }
-    function hide(el){ el.style.display = 'none'; }
-    function showBlock(el){ el.style.display = 'block'; }
-    function hideBlock(el){ el.style.display = 'none'; }
-
-    function escapeHtml(str){
-      return String(str).replace(/[&<>"']/g, m => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[m]));
-    }
-
-    function partsToBadges(partsStr){
-      const parts = (partsStr || "Unknown").split(',').map(s => s.trim()).filter(Boolean);
-      if (!parts.length) return '';
-      return parts.map(p => `<span class="badge badge-byproduct text-dark">${escapeHtml(p)}</span>`).join(' ');
-    }
-
-    async function postJson(url, body){
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(body || {})
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.ok === false) throw new Error(data.error || 'Request failed');
-      return data;
-    }
-
-    function renderInventory(inventory){
-      invBody.innerHTML = '';
-      if (!inventory || !inventory.length){
-        invBody.innerHTML = `<tr id="emptyRow"><td colspan="4" class="text-center py-4 muted">Your inventory is empty.</td></tr>`;
+    if (items.length === 0) {
+        grid.innerHTML = `<div class="col-12 text-center py-5 text-muted border rounded-4 bg-white">Pantry is empty</div>`;
         return;
-      }
+    }
 
-      for (const item of inventory){
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-id', item.id);
-        tr.innerHTML = `
-          <td class="fw-semibold text-capitalize">${escapeHtml(item.name)}</td>
-          <td class="muted"><span class="qty">${escapeHtml(item.qty)}</span><span class="ms-1 unit">${escapeHtml(item.unit)}</span></td>
-          <td class="parts">${partsToBadges(item.minor_part)}</td>
-          <td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button">Delete</button></td>
+    items.forEach(item => {
+        const parts = (item.minor_part || "").split(',').filter(Boolean);
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4';
+        col.innerHTML = `
+            <div class="item-card h-100 d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="fw-700 text-capitalize">${item.name}</span>
+                    <span class="qty-badge">${item.qty} ${item.unit}</span>
+                </div>
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                    ${parts.map(p => `<span class="part-tag">${p.trim()}</span>`).join('')}
+                </div>
+                <div class="mt-auto pt-2 text-end">
+                    <button class="btn btn-link text-danger p-0" onclick="deleteItem(${item.id})">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+            </div>
         `;
-        tr.querySelector('button').onclick = () => deleteItem(item.id);
-        invBody.appendChild(tr);
-      }
-    }
-
-    function inventoryMapFromDOM(){
-      const map = new Map(); // id -> {name, unit}
-      invBody.querySelectorAll('tr[data-id]').forEach(tr => {
-        const id = parseInt(tr.getAttribute('data-id'), 10);
-        const name = tr.children[0].textContent.trim();
-        const unit = tr.querySelector('.unit')?.textContent.trim() || '';
-        map.set(id, {name, unit});
-      });
-      return map;
-    }
-
-    function renderUseList(used){
-      const useList = document.getElementById('useList');
-      if (!used || !used.length){
-        useList.innerHTML = `<span class="muted">No usage calculated yet.</span>`;
-        return;
-      }
-
-      const invMap = inventoryMapFromDOM();
-      const lines = used.map(u => {
-        const row = invMap.get(u.id);
-        if (!row) return `Item id ${u.id} — ${u.qty}`;
-        return `${row.name} — ${u.qty} ${row.unit}`;
-      });
-
-      useList.innerHTML = `<ul class="mb-0">${lines.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
-    }
-
-    function renderApplied(applied){
-      const box = document.getElementById('appliedBox');
-      if (!applied || !applied.length){
-        box.innerHTML = `<span class="muted">Nothing applied yet.</span>`;
-        return;
-      }
-      const lines = applied.map(a =>
-        `${a.name}: ${a.before} → ${a.after} ${a.unit} (used ${a.used})`
-      );
-      box.innerHTML = `<ul class="mb-0">${lines.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
-    }
-
-    // -----------------------------
-    // ADD ITEM
-    // -----------------------------
-    document.getElementById('addForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const name = document.getElementById('itemName').value.trim();
-      const qty = document.getElementById('itemQty').value;
-      const unit = document.getElementById('itemUnit').value;
-
-      const addLoading = document.getElementById('addLoading');
-      const addBtn = document.getElementById('addBtn');
-      const addError = document.getElementById('addError');
-
-      hideBlock(addError);
-      addBtn.disabled = true;
-      show(addLoading);
-
-      try {
-        const mp = await postJson('/api/minor_parts', {name});
-        await postJson('/api/add_item', {name, qty, unit, minor_part: mp.minor_part});
-
-        const inv = await postJson('/api/inventory', {});
-        renderInventory(inv.inventory);
-
-        // refresh logs
-        await loadLogs(true);
-
-        document.getElementById('itemName').value = '';
-        document.getElementById('itemQty').value = '1';
-        document.getElementById('itemUnit').value = 'pcs';
-        document.getElementById('itemName').focus();
-
-      } catch (err) {
-        addError.textContent = err.message || 'Failed to add item.';
-        showBlock(addError);
-      } finally {
-        hide(addLoading);
-        addBtn.disabled = false;
-      }
+        grid.appendChild(col);
     });
+}
 
-    async function deleteItem(id){
-      const tr = invBody.querySelector(`tr[data-id="${id}"]`);
-      if (!tr) return;
+function updateLogUI(logs) {
+    const area = document.getElementById('logArea');
+    area.innerHTML = '';
+    logs.slice(0, 6).forEach(log => {
+        const item = document.createElement('div');
+        item.className = 'p-2 border-bottom d-flex align-items-center gap-3';
+        item.style.cursor = 'pointer';
+        item.onclick = () => {
+            document.getElementById('logDetails').innerText = JSON.stringify(log, null, 2);
+            new bootstrap.Modal('#logModal').show();
+        };
 
-      const btn = tr.querySelector('button');
-      btn.disabled = true;
+        const icon = log.event_type === 'ADD' ? 'bi-plus-square text-success' :
+                     log.event_type === 'DELETE' ? 'bi-dash-square text-danger' : 'bi-egg-fried text-primary';
 
-      try {
-        await postJson('/api/delete_item', {id});
-        const inv = await postJson('/api/inventory', {});
-        renderInventory(inv.inventory);
-
-        // refresh logs
-        await loadLogs(true);
-
-      } catch (err) {
-        alert(err.message || 'Failed to delete item.');
-        btn.disabled = false;
-      }
-    }
-
-    // -----------------------------
-    // RECIPE PREVIEW
-    // -----------------------------
-    async function previewRecipe(){
-      const overlay = document.getElementById('recipeLoading');
-      const previewBtn = document.getElementById('previewBtn');
-      const makeBtn = document.getElementById('makeBtn');
-      const errBox = document.getElementById('recipeError');
-      const recipeOut = document.getElementById('recipeOut');
-
-      hideBlock(errBox);
-      previewBtn.disabled = true;
-      makeBtn.disabled = true;
-      show(overlay);
-
-      try {
-        const out = await postJson('/api/recipe_preview', {});
-        lastRecipeText = out.recipe_text || '';
-        recipeOut.textContent = lastRecipeText || 'No result.';
-        recipeOut.classList.remove('muted');
-
-        lastUsed = Array.isArray(out.used) ? out.used : [];
-        renderUseList(lastUsed);
-
-        makeBtn.disabled = !(lastUsed.length > 0);
-      } catch (err) {
-        errBox.textContent = err.message || 'Failed to generate recipe.';
-        showBlock(errBox);
-      } finally {
-        hide(overlay);
-        previewBtn.disabled = false;
-      }
-    }
-
-    // -----------------------------
-    // MAKE RECIPE
-    // -----------------------------
-    async function makeRecipe(){
-      const overlay = document.getElementById('recipeLoading');
-      const previewBtn = document.getElementById('previewBtn');
-      const makeBtn = document.getElementById('makeBtn');
-      const errBox = document.getElementById('recipeError');
-
-      hideBlock(errBox);
-      previewBtn.disabled = true;
-      makeBtn.disabled = true;
-      show(overlay);
-
-      try {
-        const out = await postJson('/api/make_recipe', {used: lastUsed, recipe_text: lastRecipeText});
-        renderInventory(out.inventory);
-        renderApplied(out.applied || []);
-
-        lastUsed = [];
-        lastRecipeText = '';
-        renderUseList(lastUsed);
-
-        // refresh logs
-        await loadLogs(true);
-
-      } catch (err) {
-        errBox.textContent = err.message || 'Failed to apply recipe.';
-        showBlock(errBox);
-        makeBtn.disabled = !(lastUsed.length > 0);
-      } finally {
-        hide(overlay);
-        previewBtn.disabled = false;
-      }
-    }
-
-    // -----------------------------
-    // LOGS
-    // -----------------------------
-    function pillForEvent(type){
-      const base = 'log-pill';
-      if (type === 'ADD') return `<span class="${base} log-add">ADD</span>`;
-      if (type === 'DELETE') return `<span class="${base} log-del">DELETE</span>`;
-      if (type === 'MAKE_RECIPE') return `<span class="${base} log-make">MAKE</span>`;
-      return `<span class="${base}">${escapeHtml(type || 'EVENT')}</span>`;
-    }
-
-    function timeShort(s){
-      // s is like "2026-01-15 12:34:56" from sqlite datetime('now')
-      if (!s) return '';
-      return String(s).replace('T',' ').slice(0,16);
-    }
-
-    function summarizeLog(row){
-      const t = row.event_type;
-      if (t === 'ADD'){
-        const q = row.qty != null ? row.qty : '';
-        const u = row.unit || '';
-        const name = row.item_name || '';
-        return `${name} +${q} ${u}`.trim();
-      }
-      if (t === 'DELETE'){
-        const q = row.qty != null ? row.qty : '';
-        const u = row.unit || '';
-        const name = row.item_name || '';
-        return `${name} removed (${q} ${u})`.trim();
-      }
-      if (t === 'MAKE_RECIPE'){
-        const used = row.details?.used;
-        if (Array.isArray(used) && used.length){
-          const list = used.map(x => `${x.name} ${x.qty} ${x.unit}`.trim()).join(', ');
-          return `Used: ${list}`;
-        }
-        return `Recipe made`;
-      }
-      return '';
-    }
-
-    function renderLogs(logs){
-      const body = document.getElementById('logBody');
-      body.innerHTML = '';
-
-      if (!logs || !logs.length){
-        body.innerHTML = `<tr><td colspan="4" class="muted text-center py-4">No logs yet.</td></tr>`;
-        return;
-      }
-
-      for (const row of logs){
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="muted">${escapeHtml(timeShort(row.event_time))}</td>
-          <td>${pillForEvent(row.event_type)}</td>
-          <td class="log-details">${escapeHtml(summarizeLog(row))}</td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-outline-dark" type="button">View</button>
-          </td>
+        item.innerHTML = `
+            <i class="bi ${icon} fs-5"></i>
+            <div class="overflow-hidden">
+                <div class="fw-700 small text-truncate">${log.item_name || 'Recipe Made'}</div>
+                <div class="text-muted" style="font-size:0.7rem;">${new Date(log.event_time).toLocaleTimeString()}</div>
+            </div>
         `;
-        tr.querySelector('button').onclick = () => openLogDetails(row.id);
-        body.appendChild(tr);
-      }
+        area.appendChild(item);
+    });
+}
+
+function renderRecipe(title, steps) {
+    const box = document.getElementById('recipeBox');
+
+    const safeTitle = (title || '').trim();
+    const safeSteps = Array.isArray(steps) ? steps.filter(s => typeof s === 'string' && s.trim()) : [];
+
+    if (!safeTitle && safeSteps.length === 0) {
+        box.innerHTML = `<p class="text-center text-muted m-0 small">No recipe generated yet.</p>`;
+        return;
     }
 
-    function openLogDetails(logId){
-      const row = lastLogs.find(x => x.id === logId);
-      const pre = document.getElementById('logModalPre');
-      if (!row){
-        pre.textContent = 'Log not found.';
-      } else {
-        pre.textContent = JSON.stringify(row, null, 2);
-      }
+    box.innerHTML = `
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
+            <div>
+                <div class="small fw-700 text-muted">Recipe</div>
+                <div class="fw-800" style="font-size:1.15rem; letter-spacing:-0.02em;">
+                    ${safeTitle || 'Recipe'}
+                </div>
+            </div>
+        </div>
 
-      const modalEl = document.getElementById('logModal');
-      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-      modal.show();
+        <div class="d-flex flex-column gap-3">
+            ${safeSteps.map((s, i) => `
+                <div class="recipe-step-card">
+                    <div class="recipe-step-top">
+                        <span class="recipe-step-badge">Step ${i + 1}</span>
+                        <span class="small fw-700 text-muted">Instruction</span>
+                    </div>
+                    <p class="recipe-step-text">${s}</p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+async function callApi(endpoint, body) {
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    });
+    return res.json();
+}
+
+document.getElementById('addForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const loader = document.getElementById('addLoading');
+    loader.style.display = 'flex';
+    try {
+        const name = document.getElementById('itemName').value;
+        const mp = await callApi('/api/minor_parts', {name});
+        await callApi('/api/add_item', {
+            name,
+            qty: document.getElementById('itemQty').value,
+            unit: document.getElementById('itemUnit').value,
+            minor_part: mp.minor_part
+        });
+        const inv = await callApi('/api/inventory', {});
+        updateInventoryUI(inv.inventory);
+        loadLogs(true);
+        e.target.reset();
+    } finally {
+        loader.style.display = 'none';
     }
+};
 
-    async function loadLogs(silent){
-      const overlay = document.getElementById('logLoading');
-      const errBox = document.getElementById('logError');
-      const limit = document.getElementById('logLimit').value || 200;
+async function generateRecipe() {
+    document.getElementById('recipeLoading').style.display = 'flex';
+    try {
+        const data = await callApi('/api/recipe_preview', {});
+        lastUsed = data.used || [];
+        lastText = data.recipe_text || '';
+        lastTitle = data.title || '';
+        lastSteps = data.steps || [];
 
-      hideBlock(errBox);
-      if (!silent) show(overlay);
+        renderRecipe(lastTitle, lastSteps);
 
-      try {
-        const out = await postJson('/api/logs', {limit});
-        lastLogs = Array.isArray(out.logs) ? out.logs : [];
-        renderLogs(lastLogs);
-      } catch (err) {
-        errBox.textContent = err.message || 'Failed to load logs.';
-        showBlock(errBox);
-      } finally {
-        if (!silent) hide(overlay);
-      }
+        const btnText = document.getElementById('recipeGenBtnText');
+        if (btnText) btnText.textContent = 'Re-generate Recipe';
+
+        document.getElementById('recipeControls').style.setProperty('display', 'flex', 'important');
+        document.getElementById('sBar2').classList.add('active');
+    } finally {
+        document.getElementById('recipeLoading').style.display = 'none';
     }
+}
 
-    // initial log load
+async function makeRecipe() {
+    document.getElementById('recipeLoading').style.display = 'flex';
+    try {
+        const data = await callApi('/api/make_recipe', {
+            used: lastUsed,
+            recipe_text: lastText,
+            title: lastTitle,
+            steps: lastSteps
+        });
+
+        updateInventoryUI(data.inventory);
+        document.getElementById('sBar3').classList.add('active');
+
+        document.getElementById('recipeBox').innerHTML = `
+            <div class="text-center text-primary py-3">
+                <i class="bi bi-check-circle-fill fs-1 mb-2"></i>
+                <div class="fw-800">Recipe Applied Successfully</div>
+            </div>
+        `;
+        document.getElementById('recipeControls').style.display = 'none';
+        loadLogs(true);
+    } finally {
+        document.getElementById('recipeLoading').style.display = 'none';
+    }
+}
+
+async function deleteItem(id) {
+    if (!confirm("Remove item?")) return;
+    await callApi('/api/delete_item', {id});
+    const inv = await callApi('/api/inventory', {});
+    updateInventoryUI(inv.inventory);
     loadLogs(true);
-  </script>
-</body>
-</html>
+}
+
+async function loadLogs(silent) {
+    const data = await callApi('/api/logs', {limit: 10});
+    updateLogUI(data.logs);
+}
+
+window.onload = async () => {
+    const inv = await callApi('/api/inventory', {});
+    updateInventoryUI(inv.inventory);
+    loadLogs(true);
+};
+</script>
+{% endblock %}

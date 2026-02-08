@@ -2,24 +2,18 @@ import os
 import json
 import sqlite3
 from contextlib import closing
-from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 
 app = Flask(__name__)
 
-# -----------------------------
-# OpenAI
-# -----------------------------
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 DB_PATH = os.getenv("INVENTORY_DB_PATH", "inventory.db")
-EPS = 1e-6  # float safety
+EPS = 1e-6
 
 
-# -----------------------------
-# DB helpers
-# -----------------------------
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -40,23 +34,20 @@ def init_db():
             )
             """
         )
-
-        # Logs table
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type TEXT NOT NULL,     -- 'ADD', 'DELETE', 'MAKE_RECIPE'
+                event_type TEXT NOT NULL,
                 event_time TEXT NOT NULL DEFAULT (datetime('now')),
-                item_id INTEGER,              -- optional
-                item_name TEXT,               -- snapshot at time of event
-                unit TEXT,                    -- snapshot at time of event
-                qty REAL,                     -- optional (e.g., added qty)
-                details_json TEXT             -- JSON string for rich details
+                item_id INTEGER,
+                item_name TEXT,
+                unit TEXT,
+                qty REAL,
+                details_json TEXT
             )
             """
         )
-
         conn.commit()
 
 
@@ -80,9 +71,6 @@ def parse_float(x, default=None):
 
 
 def log_event(event_type: str, *, item_id=None, item_name=None, unit=None, qty=None, details=None):
-    """
-    details: any JSON-serializable object, stored as string
-    """
     try:
         details_json = json.dumps(details, ensure_ascii=False) if details is not None else None
     except Exception:
@@ -126,9 +114,6 @@ def fetch_logs(limit=200):
         return out
 
 
-# -----------------------------
-# GPT helpers
-# -----------------------------
 def get_minor_parts(food_item: str) -> str:
     if not client:
         return "Unknown"
@@ -150,29 +135,26 @@ def get_minor_parts(food_item: str) -> str:
         )
         text = (resp.choices[0].message.content or "").strip()
         return text if text else "None"
-    except Exception as e:
-        print("get_minor_parts error:", e)
+    except Exception:
         return "Unknown"
 
 
 def generate_recipe_preview(inv_items):
-    """
-    Returns:
-    {
-      "recipe_text": "...",
-      "used": [{"id": 12, "qty": 1}]
-    }
-
-    IMPORTANT:
-    - used references inventory item IDs ONLY.
-    - qty is amount to subtract from that id (in that row's unit).
-    - Byproducts appear only in recipe_text.
-    """
     if not client:
-        return {"recipe_text": "Recipe generation is unavailable because OPENAI_API_KEY is not set.", "used": []}
+        return {
+            "title": "",
+            "steps": [],
+            "recipe_text": "Recipe generation is unavailable because OPENAI_API_KEY is not set.",
+            "used": [],
+        }
 
     if not inv_items:
-        return {"recipe_text": "Inventory is empty. Add at least one item to generate a recipe.", "used": []}
+        return {
+            "title": "",
+            "steps": [],
+            "recipe_text": "Inventory is empty. Add at least one item to generate a recipe.",
+            "used": [],
+        }
 
     lines = []
     for it in inv_items:
@@ -184,20 +166,22 @@ def generate_recipe_preview(inv_items):
     schema = """
 Return ONLY valid JSON in this exact format:
 {
-  "recipe_text": "string",
+  "title": "string",
+  "steps": ["string", "string"],
   "used": [
     {"id": number, "qty": number}
   ]
 }
 
-Rules for used:
-- ONLY use ids from the inventory list.
+Rules:
+- title: short food name (3 to 8 words). No emojis.
+- steps: a list of clear cooking steps (4 to 8 steps). Each step is one sentence. No emojis.
+- used: ONLY use ids from the inventory list.
 - Never include byproducts (peel, seeds, shells) as separate used items.
 - Do not repeat the same id multiple times.
 - qty must be <= available for that id.
 - Use 1 to 4 inventory items only.
 - qty must be realistic and positive.
-- Do not use emojis.
 """
 
     try:
@@ -221,7 +205,7 @@ Rules for used:
                     ),
                 },
             ],
-            max_tokens=750,
+            max_tokens=800,
         )
 
         raw = (resp.choices[0].message.content or "").strip()
@@ -232,56 +216,71 @@ Rules for used:
 
         obj = json.loads(raw[start : end + 1])
 
-        recipe_text = str(obj.get("recipe_text") or "").strip()
+        title = str(obj.get("title") or "").strip()
+        steps = obj.get("steps") or []
         used = obj.get("used") or []
-        if not isinstance(used, list):
-            used = []
+
+        if not isinstance(steps, list):
+            steps = []
+
+        cleaned_steps = []
+        for s in steps:
+            if not isinstance(s, str):
+                continue
+            t = " ".join(s.strip().split())
+            t = t.lstrip("-•*0123456789. )(").strip()
+            if t:
+                cleaned_steps.append(t)
+        cleaned_steps = cleaned_steps[:12]
+
+        if not title:
+            title = "Simple Waste-Reducing Recipe"
+        title = " ".join(title.split())[:80]
 
         inv_map = {int(it["id"]): it for it in inv_items}
+        dedup = {}
+        if isinstance(used, list):
+            for u in used:
+                if not isinstance(u, dict):
+                    continue
+                iid = u.get("id")
+                qty = parse_float(u.get("qty"), None)
+                if iid is None or qty is None:
+                    continue
+                try:
+                    iid = int(iid)
+                except Exception:
+                    continue
+                if iid not in inv_map:
+                    continue
+                if qty <= 0:
+                    continue
 
-        # Dedupe by id using MAX qty (not sum) to avoid accidental double-subtraction
-        dedup = {}  # id -> qty
-        for u in used:
-            if not isinstance(u, dict):
-                continue
-            iid = u.get("id")
-            qty = parse_float(u.get("qty"), None)
-            if iid is None or qty is None:
-                continue
-            try:
-                iid = int(iid)
-            except Exception:
-                continue
-            if iid not in inv_map:
-                continue
-            if qty <= 0:
-                continue
+                avail = float(inv_map[iid]["qty"])
+                qty = min(qty, avail)
+                qty = round(qty, 2)
+                if iid not in dedup or qty > dedup[iid]:
+                    dedup[iid] = qty
 
-            avail = float(inv_map[iid]["qty"])
-            qty = min(qty, avail)  # clamp
-            qty = round(qty, 2)
+        cleaned_used = [{"id": iid, "qty": dedup[iid]} for iid in dedup.keys()]
 
-            # keep the larger qty only (max), never sum duplicates
-            if iid not in dedup or qty > dedup[iid]:
-                dedup[iid] = qty
+        recipe_text = title
+        if cleaned_steps:
+            recipe_text += "\n" + "\n".join([f"{i+1}. {cleaned_steps[i]}" for i in range(len(cleaned_steps))])
 
-        cleaned = [{"id": iid, "qty": dedup[iid]} for iid in dedup.keys()]
+        return {"title": title, "steps": cleaned_steps, "recipe_text": recipe_text, "used": cleaned_used}
 
-        if not recipe_text:
-            recipe_text = "Recipe generated, but the text was empty. Please try again."
-
-        return {"recipe_text": recipe_text, "used": cleaned}
-
-    except Exception as e:
-        print("generate_recipe_preview error:", e)
-        return {"recipe_text": "Sorry—recipe generation failed. Please try again.", "used": []}
+    except Exception:
+        return {"title": "", "steps": [], "recipe_text": "Sorry—recipe generation failed. Please try again.", "used": []}
 
 
-# -----------------------------
-# Routes
-# -----------------------------
 @app.route("/")
 def index():
+    return render_template("index.html", inventory=fetch_inventory())
+
+
+@app.route("/inventory")
+def inventory_page():
     return render_template("index.html", inventory=fetch_inventory())
 
 
@@ -319,7 +318,6 @@ def api_add_item():
         if row:
             before = float(row["qty"])
             new_qty = round(before + qty, 2)
-
             new_minor = row["minor_part"]
             if (new_minor in ("Unknown", "", None)) and (minor_part not in ("Unknown", "", None)):
                 new_minor = minor_part
@@ -330,21 +328,14 @@ def api_add_item():
             )
             conn.commit()
 
-            # Log ADD (merge into existing row)
             log_event(
                 "ADD",
                 item_id=int(row["id"]),
                 item_name=row["name"],
                 unit=row["unit"],
                 qty=round(qty, 2),
-                details={
-                    "mode": "merge",
-                    "before": round(before, 2),
-                    "after": round(new_qty, 2),
-                    "minor_part": new_minor,
-                },
+                details={"mode": "merge", "before": round(before, 2), "after": round(new_qty, 2), "minor_part": new_minor},
             )
-
             return jsonify({"ok": True})
 
         cur = conn.execute(
@@ -354,19 +345,14 @@ def api_add_item():
         new_id = cur.lastrowid
         conn.commit()
 
-    # Log ADD (new row)
     log_event(
         "ADD",
         item_id=int(new_id),
         item_name=name,
         unit=unit,
         qty=round(qty, 2),
-        details={
-            "mode": "new",
-            "minor_part": minor_part or "Unknown",
-        },
+        details={"mode": "new", "minor_part": minor_part or "Unknown"},
     )
-
     return jsonify({"ok": True})
 
 
@@ -390,7 +376,6 @@ def api_delete_item():
     if cur.rowcount == 0:
         return jsonify({"ok": False, "error": "Item not found"}), 404
 
-    # Log DELETE with snapshot
     if row:
         log_event(
             "DELETE",
@@ -413,31 +398,28 @@ def api_inventory():
 def api_recipe_preview():
     inv = fetch_inventory()
     result = generate_recipe_preview(inv)
-    return jsonify({"ok": True, "recipe_text": result["recipe_text"], "used": result["used"]})
+    return jsonify(
+        {
+            "ok": True,
+            "title": result.get("title") or "",
+            "steps": result.get("steps") or [],
+            "recipe_text": result.get("recipe_text") or "",
+            "used": result.get("used") or [],
+        }
+    )
 
 
 @app.post("/api/make_recipe")
 def api_make_recipe():
-    """
-    Body:
-    {
-      "used": [ {"id": 12, "qty": 1}, ... ],
-      "recipe_text": "string (optional but recommended)"
-    }
-
-    We subtract by ID only.
-    - Dedupe by id on the server side as well (max qty).
-    - Delete row only when remaining qty is ~0.
-    - Log the MAKE_RECIPE event with applied deductions and recipe text.
-    """
     data = request.get_json(silent=True) or {}
     used = data.get("used") or []
     recipe_text = (data.get("recipe_text") or "").strip()
+    title = (data.get("title") or "").strip()
+    steps = data.get("steps") or []
 
     if not isinstance(used, list) or not used:
         return jsonify({"ok": False, "error": "No used-items provided."}), 400
 
-    # server-side dedupe: id -> max qty
     dedup = {}
     for u in used:
         if not isinstance(u, dict):
@@ -457,11 +439,10 @@ def api_make_recipe():
     if not dedup:
         return jsonify({"ok": False, "error": "Invalid used-items payload."}), 400
 
-    applied = []  # transparency: what was deducted
-    used_summary = []  # compact summary for log
+    applied = []
+    used_summary = []
 
     with closing(get_db()) as conn:
-        # Validate quantities first
         for iid, sub_qty in dedup.items():
             row = conn.execute("SELECT id, name, qty, unit FROM inventory WHERE id=?", (iid,)).fetchone()
             if not row:
@@ -469,11 +450,8 @@ def api_make_recipe():
 
             avail = float(row["qty"])
             if sub_qty > avail + EPS:
-                return jsonify(
-                    {"ok": False, "error": f"Not enough quantity for {row['name']} ({row['unit']}). Need {sub_qty}, have {avail}."}
-                ), 400
+                return jsonify({"ok": False, "error": f"Not enough quantity for {row['name']} ({row['unit']}). Need {sub_qty}, have {avail}."}), 400
 
-        # Apply updates
         for iid, sub_qty in dedup.items():
             row = conn.execute("SELECT id, name, qty, unit FROM inventory WHERE id=?", (iid,)).fetchone()
             avail = float(row["qty"])
@@ -503,14 +481,18 @@ def api_make_recipe():
 
         conn.commit()
 
-    # Log MAKE_RECIPE after commit
+    if (not recipe_text) and title and isinstance(steps, list) and steps:
+        safe_steps = []
+        for s in steps:
+            if isinstance(s, str) and s.strip():
+                safe_steps.append(" ".join(s.strip().split()))
+        recipe_text = title + "\n" + "\n".join([f"{i+1}. {safe_steps[i]}" for i in range(len(safe_steps))])
+
     log_event(
         "MAKE_RECIPE",
-        item_id=None,
-        item_name=None,
-        unit=None,
-        qty=None,
         details={
+            "title": title if title else None,
+            "steps": steps if isinstance(steps, list) else None,
             "recipe_text": recipe_text if recipe_text else "(no recipe_text provided)",
             "used": used_summary,
             "applied": applied,
